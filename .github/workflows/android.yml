@@ -68,11 +68,22 @@ jobs:
           DEST="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
           mkdir -p "$DEST"
           cp -R /tmp/tpl/templates/. "$DEST/"
-          rm -rf android /tmp/android-src
-          mkdir -p /tmp/android-src
-          unzip -q "$DEST/android_source.zip" -d /tmp/android-src
-          SRC=$(dirname "$(find /tmp/android-src -name .build_version | head -1)")
-          mv "$SRC" android
+          # Godot expects res://android/build from android_source.zip, plus
+          # res://android/.build_version naming the template (4.7.2.stable).
+          rm -rf android
+          mkdir -p android/build
+          unzip -q "$DEST/android_source.zip" -d android/build
+          if [ ! -f android/build/build.gradle ]; then
+            INNER=$(find android/build -name build.gradle | head -1)
+            INNER=$(dirname "$INNER")
+            tmp=$(mktemp -d)
+            mv "$INNER"/* "$INNER"/.[!.]* "$tmp"/ 2>/dev/null || true
+            rm -rf android/build
+            mv "$tmp" android/build
+          fi
+          printf '%s\n' "${GODOT_VERSION}.stable" > android/.build_version
+          : > android/build/.gdignore
+          test -f android/build/build.gradle
           echo "android build template: $(cat android/.build_version)"
 
       - name: Editor settings and build number
