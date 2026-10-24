@@ -83,6 +83,12 @@ var last_shake_time = 0
 var snap_tile_box_to_camera = true
 var mouse_drag = false
 var mouse_click_position = null
+var gesture_from_touch := false
+var _touches := {}
+var _touch_origin := {}
+var _pinch_distance := 0.0
+
+const TOUCH_TAP_SLOP := 22.0
 
 var camera_pan = Vector2(0, 0)
 var _last_used_blur_magnitude = 0
@@ -129,6 +135,17 @@ func _input(event):
 	if self.paused:
 		return
 
+	if event is InputEventScreenTouch:
+		_handle_screen_touch(event)
+		if self.mouse_drag:
+			get_viewport().set_input_as_handled()
+		return
+	if event is InputEventScreenDrag:
+		_handle_screen_drag(event)
+		if self.mouse_drag:
+			get_viewport().set_input_as_handled()
+		return
+
 	if event.is_action_pressed("switch_camera"):
 		self.switch_camera()
 	if event.is_action_pressed("mouse_zoom_in"):
@@ -143,8 +160,15 @@ func _input(event):
 		if event.pressed:
 			self.mouse_click_position = event.position
 		else:
-			self.mouse_click_position = null
+			# The board reads mouse_drag in its own _input, which runs first.
+			# Clear the flag only after that release has been seen.
+			if self._touches.is_empty():
+				self.mouse_click_position = null
+				self.mouse_drag = false
+				self.gesture_from_touch = false
 	elif event is InputEventMouseMotion:
+		if not self._touches.is_empty():
+			return
 		if self.mouse_click_position != null:
 			if event.position.distance_squared_to(self.mouse_click_position) > self.MOUSE_MOVE_THRESHOLD:
 				self.mouse_drag = true
@@ -154,10 +178,67 @@ func _input(event):
 		if self.mouse_drag:
 			self._mouse_shift_camera(event.relative)
 	elif event is InputEventPanGesture:
+		if not self._touches.is_empty():
+			return
 		self._mouse_shift_camera(event.delta * pan_speed)
 	elif event is InputEventMagnifyGesture:
+		if not self._touches.is_empty():
+			return
 		var zoom_steps = int((event.factor - 1) * 100)
 		self._mouse_zoom(self.mouse_zoom_step * zoom_steps)
+
+
+func _handle_screen_touch(event: InputEventScreenTouch) -> void:
+	if self.camera_in_transit or self.ai_operated or self.script_operated:
+		return
+	if event.pressed:
+		self.gesture_from_touch = true
+		self._touches[event.index] = event.position
+		self._touch_origin[event.index] = event.position
+		if self._touches.size() == 1:
+			self.mouse_click_position = event.position
+		else:
+			self.mouse_drag = true
+			self._pinch_distance = _current_pinch_distance()
+	else:
+		self._touches.erase(event.index)
+		self._touch_origin.erase(event.index)
+		if self._touches.size() == 1:
+			var remaining = self._touches.keys()[0]
+			self._touch_origin[remaining] = self._touches[remaining]
+			self._pinch_distance = 0.0
+		elif self._touches.is_empty():
+			self._pinch_distance = 0.0
+
+
+func _handle_screen_drag(event: InputEventScreenDrag) -> void:
+	if self.camera_in_transit or self.ai_operated or self.script_operated:
+		return
+	if not self._touches.has(event.index):
+		self._touches[event.index] = event.position
+		self._touch_origin[event.index] = event.position
+	var previous: Vector2 = self._touches[event.index]
+	self._touches[event.index] = event.position
+	if self._touches.size() >= 2:
+		self.mouse_drag = true
+		var distance := _current_pinch_distance()
+		if self._pinch_distance > 0.0:
+			self._mouse_zoom(-(distance - self._pinch_distance) * 0.06)
+		self._pinch_distance = distance
+		self._mouse_shift_camera(event.relative * 0.45)
+		return
+	var origin: Vector2 = self._touch_origin.get(event.index, event.position)
+	if event.position.distance_to(origin) > TOUCH_TAP_SLOP:
+		self.mouse_drag = true
+	if self.mouse_drag:
+		self._mouse_shift_camera(event.position - previous)
+
+
+func _current_pinch_distance() -> float:
+	var points: Array = self._touches.values()
+	if points.size() < 2:
+		return 0.0
+	return points[0].distance_to(points[1])
 
 func _process(delta):
 	if self.paused:

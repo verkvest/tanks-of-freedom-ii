@@ -10,18 +10,16 @@ config_version=5
 
 [application]
 
-config/name="Tanks of Freedom II"
-config/description="Turn-based strategy game."
+config/name="Ashgrid"
+config/description="Turn-based isometric tank strategy."
 config/version="1.0.9"
 run/main_scene="res://scenes/main_menu/main_menu.tscn"
-config/features=PackedStringArray("4.4")
+config/features=PackedStringArray("4.7")
 boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/use_filter=false
 boot_splash/image="res://assets/gui/splash.png"
-config/icon="res://assets/icons/tof2_icon1024.png"
-config/windows_native_icon="res://assets/icons/tof2_icon.ico"
-name_pl=""
-config/name_pl="Czołgi Wolności II"
+config/icon="res://assets/icons/ashgrid/icon_1024.png"
+config/name_pl="Ashgrid"
 
 [audio]
 
@@ -42,14 +40,16 @@ Online="*res://scripts/services/online.gd"
 Multiplayer="*res://scripts/services/multiplayer.gd"
 Autodiscovery="*res://scripts/services/autodiscovery.gd"
 Relay="*res://scripts/services/relay.gd"
+MobileLayout="*res://scripts/services/mobile_layout.gd"
 
 [display]
 
 window/size/viewport_width=1280
 window/size/viewport_height=800
 window/stretch/mode="canvas_items"
-window/stretch/aspect="keep_height"
-window/vsync/vsync_mode=false
+window/stretch/aspect="expand"
+window/handheld/orientation=4
+window/vsync/vsync_mode=1
 
 [filesystem]
 
@@ -222,7 +222,10 @@ undo_move={
 
 [input_devices]
 
-pointing/android/enable_pan_and_scale_gestures=true
+pointing/emulate_mouse_from_touch=true
+pointing/emulate_touch_from_mouse=false
+pointing/android/enable_long_press_as_right_click=false
+pointing/android/enable_pan_and_scale_gestures=false
 
 [internationalization]
 
@@ -243,6 +246,8 @@ common/physics_fps=144
 
 [rendering]
 
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
 textures/canvas_textures/default_texture_filter=0
 anti_aliasing/quality/msaa_3d=2
 textures/decals/filter=0

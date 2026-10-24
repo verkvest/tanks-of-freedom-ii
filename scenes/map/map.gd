@@ -78,6 +78,21 @@ func snap_tile_box():
 func map_to_local(queried_position):
 	return Vector3(queried_position.x * self.TILE_SIZE, 0, queried_position.y * self.TILE_SIZE)
 
+func tile_on_screen(screen_pos: Vector2) -> Vector2i:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return self.tile_box_position
+	var origin := cam.project_ray_origin(screen_pos)
+	var normal := cam.project_ray_normal(screen_pos)
+	if abs(normal.y) < 0.0001:
+		return self.tile_box_position
+	var distance := -origin.y / normal.y
+	if distance < 0.0:
+		return self.tile_box_position
+	var mapped: Vector2 = self.local_to_map(origin + normal * distance)
+	return Vector2i(mapped)
+
+
 func local_to_map(queried_position):
 	var tile_position = Vector2(0, 0)
 

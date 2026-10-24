@@ -75,6 +75,19 @@ func _intro_finished():
 	if self.match_setup.campaign_win:
 		self.reopen_campaign_mission_selection_after_win()
 
+	if OS.get_environment("ASHGRID_SHOTS") == "1":
+		_capture_menu_and_start_skirmish()
+
+
+func _capture_menu_and_start_skirmish() -> void:
+	await get_tree().create_timer(1.4).timeout
+	await MobileLayout.save_screenshot("menu.png")
+	self.match_setup.reset()
+	self.match_setup.map_name = "2p_oasis"
+	self.match_setup.add_player("yellow", 100, "human", true, 1)
+	self.match_setup.add_player("red", 100, "ai", true, 2)
+	self.switcher.board()
+
 func open_picker():
 	self.ui.hide_menu()
 	await self.get_tree().create_timer(self.MENU_TIMEOUT).timeout

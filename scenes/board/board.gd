@@ -57,6 +57,14 @@ func _ready_start():
 		self.start_turn()
 	else:
 		self.restore_saved_state()
+	if OS.get_environment("ASHGRID_SHOTS") == "1":
+		_capture_gameplay_shot()
+
+
+func _capture_gameplay_shot() -> void:
+	await get_tree().create_timer(3.2).timeout
+	await MobileLayout.save_screenshot("gameplay.png")
+	get_tree().quit()
 
 
 func _input(event):
@@ -86,8 +94,16 @@ func _input(event):
 				self.mouse_click_position = event.position
 
 			if event.is_action_released("mouse_click"):
-				if self.mouse_click_position != null and event.position.distance_squared_to(self.mouse_click_position) < self.map.camera.MOUSE_MOVE_THRESHOLD:
-					self.select_tile(self.map.tile_box_position)
+				var tap := false
+				if self.mouse_click_position != null and not self.map.camera.mouse_drag:
+					if self.map.camera.gesture_from_touch:
+						tap = event.position.distance_to(self.mouse_click_position) <= self.map.camera.TOUCH_TAP_SLOP
+					else:
+						tap = event.position.distance_squared_to(self.mouse_click_position) < self.map.camera.MOUSE_MOVE_THRESHOLD
+				if tap and not self.ui.hover_menu.consume_screen_press(event.position):
+					var tile_pos = self.map.tile_on_screen(event.position)
+					self.map.set_tile_box_position(tile_pos)
+					self.select_tile(tile_pos)
 				self.mouse_click_position = null
 
 			if event.is_action_pressed("game_context"):

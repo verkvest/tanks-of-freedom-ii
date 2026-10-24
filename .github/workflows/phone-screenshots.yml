@@ -1,0 +1,58 @@
+# Phone-viewport captures of the main menu and a skirmish, for review.
+name: phone-screenshots
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["cursor/**"]
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  screenshots:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot ${{ env.GODOT_VERSION }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1 libxcursor1 libxi6 libxinerama1 libxrandr2 unzip
+          curl -fsSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q -o /tmp/godot.zip -d "$RUNNER_TEMP/godot"
+          GODOT=$(find "$RUNNER_TEMP/godot" -type f -name 'Godot*' -executable | head -1)
+          chmod +x "$GODOT"
+          echo "GODOT=$GODOT" >> "$GITHUB_ENV"
+
+      - name: Import project
+        run: |
+          set -euo pipefail
+          "$GODOT" --headless --path . --import
+
+      - name: Capture menu and gameplay
+        env:
+          ASHGRID_SHOTS: "1"
+          ASHGRID_FORCE_PHONE: "1"
+          ASHGRID_SHOT_DIR: ${{ github.workspace }}/build/screenshots
+        run: |
+          set -euo pipefail
+          mkdir -p build/screenshots
+          # lavapipe renders the mobile (Vulkan) renderer without a GPU.
+          export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json
+          timeout 240 xvfb-run -a -s "-screen 0 2400x1200x24" \
+            "$GODOT" --path . --display-driver x11 --rendering-method mobile \
+            --rendering-driver vulkan --resolution 2340x1080
+          test -s build/screenshots/menu.png
+          test -s build/screenshots/gameplay.png
+          ls -lh build/screenshots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phone-screenshots
+          path: build/screenshots/*.png
+          if-no-files-found: error

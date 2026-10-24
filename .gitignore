@@ -3,7 +3,9 @@
 .import/
 .godot/
 export.cfg
-export_presets.cfg
+# Android gradle project is unpacked from the Godot export templates in CI.
+/android/
+/build/
 
 # Mono-specific ignores
 .mono/

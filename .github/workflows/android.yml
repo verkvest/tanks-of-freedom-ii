@@ -1,0 +1,152 @@
+# Release AAB + APK for Ashgrid (targetSdk 36).
+# Signs with ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS
+# when those secrets exist. Otherwise uploads a debug-signed APK.
+name: android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["cursor/**"]
+
+env:
+  GODOT_VERSION: 4.7.2
+  APP_ID: es.verkvest.ashgrid
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_B64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Java and Android SDK 36
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y openjdk-17-jdk unzip wget
+          echo "JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))" >> "$GITHUB_ENV"
+          if [ -z "${ANDROID_HOME:-}" ]; then
+            echo "ANDROID_HOME=$HOME/android-sdk" >> "$GITHUB_ENV"
+            ANDROID_HOME=$HOME/android-sdk
+          fi
+          mkdir -p "$ANDROID_HOME/cmdline-tools"
+          if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            curl -fsSL -o /tmp/cmdtools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+            rm -rf /tmp/cmdline-tools
+            unzip -q /tmp/cmdtools.zip -d /tmp
+            rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+            mkdir -p "$ANDROID_HOME/cmdline-tools"
+            mv /tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
+          fi
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
+            "platforms;android-36" "build-tools;36.0.0" "platform-tools" >/dev/null
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Install Godot ${{ env.GODOT_VERSION }} and export templates
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q -o /tmp/godot.zip -d "$RUNNER_TEMP/godot"
+          GODOT=$(find "$RUNNER_TEMP/godot" -type f -name 'Godot*' -executable | head -1)
+          chmod +x "$GODOT"
+          echo "GODOT=$GODOT" >> "$GITHUB_ENV"
+          curl -fsSL -o /tmp/templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          rm -rf /tmp/tpl && mkdir -p /tmp/tpl
+          unzip -q /tmp/templates.tpz -d /tmp/tpl
+          DEST="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$DEST"
+          cp -R /tmp/tpl/templates/. "$DEST/"
+          rm -rf android /tmp/android-src
+          mkdir -p /tmp/android-src
+          unzip -q "$DEST/android_source.zip" -d /tmp/android-src
+          SRC=$(dirname "$(find /tmp/android-src -name .build_version | head -1)")
+          mv "$SRC" android
+          echo "android build template: $(cat android/.build_version)"
+
+      - name: Editor settings and build number
+        run: |
+          set -euo pipefail
+          JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/.config/godot"
+          cat > "$HOME/.config/godot/editor_settings-4.7.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path="$ANDROID_HOME"
+          export/android/java_sdk_path="$JAVA_HOME"
+          export/android/debug_keystore_user="androiddebugkey"
+          export/android/debug_keystore_pass="android"
+          EOF
+          python3 - <<PY
+          from pathlib import Path
+          text = Path("export_presets.cfg").read_text()
+          text = text.replace("version/code=1", "version/code=${{ github.run_number }}")
+          Path("export_presets.cfg").write_text(text)
+          PY
+
+      - name: Debug keystore fallback
+        if: env.HAS_KEYSTORE != 'true'
+        run: |
+          set -euo pipefail
+          KEY="$RUNNER_TEMP/debug.keystore"
+          keytool -genkeypair -keystore "$KEY" -storepass android -keypass android \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Ashgrid Debug, OU=Ashgrid, O=verkvest, C=ES"
+          python3 - <<PY
+          from pathlib import Path
+          p = Path.home() / ".config/godot/editor_settings-4.7.tres"
+          text = p.read_text()
+          text += '\nexport/android/debug_keystore="$KEY"\n'
+          p.write_text(text)
+          PY
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$KEY" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+
+      - name: Release keystore
+        if: env.HAS_KEYSTORE == 'true'
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          KEY="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$ANDROID_KEYSTORE_B64" | base64 --decode > "$KEY"
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PATH=$KEY" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_USER=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Export release AAB and APK
+        if: env.HAS_KEYSTORE == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p build/android
+          "$GODOT" --headless --path . --export-release "Android AAB" build/android/ashgrid.aab
+          "$GODOT" --headless --path . --export-release "Android APK" build/android/ashgrid.apk
+          ls -lh build/android
+
+      - name: Export debug-signed APK
+        if: env.HAS_KEYSTORE != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p build/android
+          "$GODOT" --headless --path . --export-debug "Android APK" build/android/ashgrid-debug.apk
+          ls -lh build/android
+          # Confirm the packaged manifest targets API 36.
+          if command -v aapt >/dev/null; then
+            aapt dump badging build/android/ashgrid-debug.apk | head -20 || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-ashgrid
+          path: build/android/*
+          if-no-files-found: error

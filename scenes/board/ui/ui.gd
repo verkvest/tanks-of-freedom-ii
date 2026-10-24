@@ -61,6 +61,22 @@ func _ready():
 	self.show_controls()
 	self.settings.changed.connect(self._on_settings_changed)
 	self.turn_timer.turn_timeout.connect(self.turn_timer.hide)
+	if MobileLayout.is_phone():
+		_apply_phone_chrome()
+
+
+func _apply_phone_chrome() -> void:
+	MobileLayout.apply_safe_area(self)
+	MobileLayout.enlarge_board(self)
+	MobileLayout.enlarge_text(self)
+	MobileLayout.add_touch_hint(self)
+	var edge := $edge_pan as Control
+	edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	edge_pan_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	edge_pan_right.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	edge_pan_top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	edge_pan_bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hover_menu.enable_phone_commands()
 
 func is_popup_open():
 	if self.summary.is_visible():
