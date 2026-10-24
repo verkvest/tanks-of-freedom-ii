@@ -42,8 +42,14 @@ jobs:
             mkdir -p "$ANDROID_HOME/cmdline-tools"
             mv /tmp/cmdline-tools "$ANDROID_HOME/cmdline-tools/latest"
           fi
+          # `yes` exits with SIGPIPE once sdkmanager has its answers. Ignore that.
+          set +o pipefail
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" --licenses >/dev/null
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
-            "platforms;android-36" "build-tools;36.0.0" "platform-tools" >/dev/null
+            "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+          set -o pipefail
+          test -d "$ANDROID_HOME/platforms/android-36"
+          test -d "$ANDROID_HOME/build-tools/36.0.0"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
 
       - name: Install Godot ${{ env.GODOT_VERSION }} and export templates
