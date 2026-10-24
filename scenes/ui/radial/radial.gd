@@ -63,6 +63,12 @@ func _input(event):
 		if not self.mouse_mode:
 			self.unfocus_field()
 
+	if not self.opening:
+		if event is InputEventScreenTouch and event.pressed:
+			self._focus_nearest(event.position)
+		elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			self._focus_nearest(event.position)
+
 	if event.is_action_released("mouse_click"):
 		if self.is_field_focused():
 			self.execute_focused_field()
@@ -100,6 +106,23 @@ func clear_fields():
 
 func clear_field(index):
 	self.fields[index].clear()
+
+func _focus_nearest(screen_pos: Vector2) -> void:
+	var best_index := -1
+	var best_distance := INF
+	var limit := 88.0 * get_global_transform().get_scale().x
+	for field in self.fields:
+		if not field.visible or not field.is_assigned():
+			continue
+		var distance := screen_pos.distance_to(field.global_position)
+		if distance <= limit and distance < best_distance:
+			best_index = field.index
+			best_distance = distance
+	if best_index < 0:
+		self.unfocus_field()
+		return
+	self.focus_field(best_index)
+
 
 func focus_field(index):
 	if index >= self.fields.size():

@@ -52,7 +52,12 @@ var settings = {
 
 func _ready():
 	self._detect_steam_deck()
+	if not self.filesystem.file_exists(self.SETTINGS_FILE_PATH) and _is_phone_runtime():
+		self._apply_phone_defaults()
+		self.save_settings_to_file()
 	self.load_settings_from_file()
+	if OS.get_environment("ASHGRID_SHOTS") == "1":
+		self._apply_shot_overrides()
 
 func save_settings_to_file():
 	self.filesystem.write_data_as_json_to_file(self.SETTINGS_FILE_PATH, self.settings)
@@ -116,7 +121,10 @@ func _apply_option(key):
 	elif key == "scale_ui":
 		if self.settings[key]:
 			get_window().set_content_scale_mode(Window.CONTENT_SCALE_MODE_CANVAS_ITEMS)
-			get_window().set_content_scale_aspect(Window.CONTENT_SCALE_ASPECT_KEEP_HEIGHT)
+			if _is_phone_runtime():
+				get_window().set_content_scale_aspect(Window.CONTENT_SCALE_ASPECT_EXPAND)
+			else:
+				get_window().set_content_scale_aspect(Window.CONTENT_SCALE_ASPECT_KEEP_HEIGHT)
 		else:
 			get_window().set_content_scale_mode(Window.CONTENT_SCALE_MODE_DISABLED)
 			get_window().set_content_scale_aspect(Window.CONTENT_SCALE_ASPECT_KEEP)
@@ -173,6 +181,43 @@ func _detect_steam_deck():
 
 func _is_steam_deck():
 	return OS.get_distribution_name() == "SteamOS"
+
+
+func _is_phone_runtime() -> bool:
+	if OS.get_environment("ASHGRID_FORCE_PHONE") == "1":
+		return true
+	return OS.has_feature("mobile")
+
+
+func _apply_phone_defaults() -> void:
+	var shots := OS.get_environment("ASHGRID_SHOTS") == "1"
+	self.settings["fullscreen"] = not shots
+	self.settings["vsync"] = true
+	self.settings["msaa"] = 2.0
+	self.settings["fxaa"] = false
+	self.settings["tilt_shift_enabled"] = false
+	self.settings["edge_pan"] = false
+	self.settings["dec_shadows"] = false
+	self.settings["shadows"] = true
+	self.settings["fps"] = 60.0
+	self.settings["ips"] = 60.0
+	self.settings["render_scale"] = 100 if shots else 80
+	self.settings["show_intro"] = false
+	self.settings["show_controls"] = false
+	self.settings["scale_ui"] = true
+
+
+func _apply_shot_overrides() -> void:
+	self.settings["fullscreen"] = false
+	self.settings["render_scale"] = 100
+	self.settings["show_intro"] = false
+	self.settings["show_controls"] = false
+	self.settings["vsync"] = true
+	self.settings["scale_ui"] = true
+	self._apply_option("fullscreen")
+	self._apply_option("render_scale")
+	self._apply_option("vsync")
+	self._apply_option("scale_ui")
 
 func _apply_steam_deck_settings():
 	self.settings["fullscreen"] = true

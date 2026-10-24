@@ -21,6 +21,19 @@ extends Control
 @onready var changelog_button = $"extra_buttons/changelog_button"
 
 
+func _ready() -> void:
+	call_deferred("_apply_phone_chrome")
+
+
+func _apply_phone_chrome() -> void:
+	if not MobileLayout.is_phone():
+		return
+	MobileLayout.apply_safe_area(self)
+	MobileLayout.enlarge_text(self)
+	extra_buttons.pivot_offset = Vector2(190, 100)
+	extra_buttons.scale = Vector2(1.35, 1.35)
+
+
 func bind_menu(main_menu):
 	self.menu.bind_menu(main_menu)
 	self.skirmish.bind_menu(main_menu)

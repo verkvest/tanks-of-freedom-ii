@@ -7,17 +7,90 @@ const FADE_OUT_TIME = 3.0
 var board = null
 var fade_out_timer = 0.0
 var hover_stack = 0
+var phone_commands := false
 
 var hovered_button = null
 
 func _ready():
 	pass # Replace with function body.
 
+func enable_phone_commands() -> void:
+	phone_commands = true
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_layout_phone_buttons()
+	for path in [
+		"turn_button/mouse_click",
+		"build_button/button_anchor/mouse_click",
+		"stats_button/button_anchor/mouse_click",
+		"skills_button/button_anchor/mouse_click",
+	]:
+		var area := get_node_or_null(path) as Area2D
+		if area:
+			area.input_pickable = false
+	visible = true
+	modulate = Color(1, 1, 1, 1)
+
+
+func _layout_phone_buttons() -> void:
+	var step := 120.0
+	_place_command($"build_button", -step)
+	_place_command($"stats_button", -step * 2.0)
+	_place_command($"skills_button", -step * 3.0)
+
+
+func _place_command(button: Control, left: float) -> void:
+	button.offset_left = left
+	button.offset_top = 0.0
+	button.offset_right = left + 120.0
+	button.offset_bottom = 120.0
+
+
+func consume_screen_press(screen_pos: Vector2) -> bool:
+	if not phone_commands or not visible:
+		return false
+	if board == null or not board._can_current_player_perform_actions():
+		return false
+	var best := ""
+	var best_distance := INF
+	for button_name in ["turn", "build", "stats", "skills"]:
+		if not _command_visible(button_name):
+			continue
+		var anchor := _command_anchor(button_name)
+		if anchor == null:
+			continue
+		var radius := 58.0 * anchor.get_global_transform().get_scale().x
+		var distance := screen_pos.distance_to(anchor.global_position)
+		if distance <= radius and distance < best_distance:
+			best = button_name
+			best_distance = distance
+	if best == "":
+		return false
+	hovered_button = best
+	_perform_action()
+	return true
+
+
+func _command_visible(button_name: String) -> bool:
+	if button_name == "turn":
+		return true
+	var button := get_node_or_null(button_name + "_button") as CanvasItem
+	return button != null and button.visible
+
+
+func _command_anchor(button_name: String) -> Node2D:
+	if button_name == "turn":
+		return $"turn_button"
+	return get_node_or_null(button_name + "_button/button_anchor") as Node2D
+
+
 func _input(event):
 	if not get_window().has_focus():
 		return
 
 	if self.board == null:
+		return
+
+	if phone_commands:
 		return
 
 	if event is InputEventMouseMotion:
@@ -60,6 +133,14 @@ func _physics_process(delta):
 		$"stats_button".hide()
 		$"skills_button".hide()
 
+
+	if phone_commands:
+		if self._should_clear():
+			self.visible = false
+		elif self.board._can_current_player_perform_actions():
+			self.visible = true
+			self.modulate.a = 1.0
+		return
 
 	if self.is_visible() and self.fade_out_timer > self.FADE_OUT_TIME:
 		self._fade_out()

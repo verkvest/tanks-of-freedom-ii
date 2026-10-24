@@ -21,9 +21,41 @@ var recent_button_used = null
 func _ready():
 	self.set_process_input(true)
 	self.campaign_button.grab_focus()
+	_apply_phone_menu()
 
 	if OS.has_feature("demo"):
 		self.online_button.set_disabled(true)
+
+
+func _apply_phone_menu() -> void:
+	if not MobileLayout.is_phone():
+		return
+	var buttons := [
+		campaign_button, skirmish_button, multiplayer_button, load_button,
+		online_button, editor_button, settings_button, quit_button,
+	]
+	var width := 300.0
+	var height := 86.0
+	var gap_x := 18.0
+	var gap_y := 12.0
+	var origin_x := -((width * 2.0 + gap_x) / 2.0)
+	var origin_y := -8.0
+	for i in buttons.size():
+		var button = buttons[i]
+		var column := i % 2
+		var row := int(i / 2.0)
+		button.offset_left = origin_x + column * (width + gap_x)
+		button.offset_top = origin_y + row * (height + gap_y)
+		button.offset_right = button.offset_left + width
+		button.offset_bottom = button.offset_top + height
+		var label := button.get_node_or_null("label") as Label
+		if label:
+			label.add_theme_font_size_override(&"font_size", 28)
+	var background := $background as Control
+	background.offset_left = origin_x - 18.0
+	background.offset_top = origin_y - 18.0
+	background.offset_right = origin_x + width * 2.0 + gap_x + 18.0
+	background.offset_bottom = origin_y + 4.0 * height + 3.0 * gap_y + 18.0
 
 func _input(event):
 	if event.is_action_pressed("ui_cancel"):
